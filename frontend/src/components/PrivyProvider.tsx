@@ -13,7 +13,7 @@ const queryClient = new QueryClient();
 const wagmiConfig = createConfig({
   chains: [arbitrumSepolia],
   transports: {
-    [arbitrumSepolia.id]: http(),
+    [arbitrumSepolia.id]: http("https://sepolia-rollup.arbitrum.io/rpc"),
   },
 });
 
@@ -26,13 +26,9 @@ export function PrivyWrapper({ children }: { children: React.ReactNode }) {
         appearance: {
           theme: "light",
           accentColor: "#676FFF",
-          logo: "https://your-logo-url.com/logo.png",
         },
-        embeddedWallets: {
-          ethereum: {
-            createOnLogin: "users-without-wallets",
-          },
-        },
+        defaultChain: arbitrumSepolia,
+        supportedChains: [arbitrumSepolia],
       }}
     >
       <QueryClientProvider client={queryClient}>
