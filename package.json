@@ -23,6 +23,7 @@
   },
   "homepage": "https://github.com/cqlyj/Stapal#readme",
   "dependencies": {
-    "@pythnetwork/entropy-sdk-solidity": "^2.1.0"
+    "@pythnetwork/entropy-sdk-solidity": "^2.1.0",
+    "@pythnetwork/pyth-sdk-solidity": "^4.2.0"
   }
 }
