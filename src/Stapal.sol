@@ -21,7 +21,7 @@ contract Stapal is IEntropyConsumer {
         0x489f02f2f13584026d63fd397c80ed3b414a2820c4d43da0306fc007fcd5a8e0;
     mapping(uint256 receiptId => address customer) public receipts;
     MockPYUSD public pyusd;
-    uint256 public counter = 0;
+    uint256 public counter;
     address[] public currentWinners;
     uint256[] public currentAmounts;
     /*//////////////////////////////////////////////////////////////
@@ -69,6 +69,7 @@ contract Stapal is IEntropyConsumer {
         entropy = IEntropyV2(entropyAddress);
         pyth = IPyth(pythContract);
         pyusd = MockPYUSD(pyusdContract);
+        counter = 0;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -98,7 +99,7 @@ contract Stapal is IEntropyConsumer {
         address receiver,
         uint256 amount
     ) external onlyMerchant(receiver) {
-        bool success = pyusd.transferFrom(sender, address(this), amount);
+        bool success = pyusd.transferFrom(sender, receiver, amount);
         if (!success) {
             revert TransferFailed();
         }
