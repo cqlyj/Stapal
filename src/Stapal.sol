@@ -85,6 +85,14 @@ contract Stapal is IEntropyConsumer {
         emit Deposited(msg.sender, amount);
     }
 
+    function addMerchant(address merchant) external onlyAdmin {
+        merchants[merchant] = true;
+    }
+
+    function removeMerchant(address merchant) external onlyAdmin {
+        merchants[merchant] = false;
+    }
+
     function buy(
         address sender,
         address receiver,
