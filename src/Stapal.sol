@@ -104,7 +104,7 @@ contract Stapal is IEntropyConsumer {
         emit Bought(sender, receiver, amount);
     }
 
-    function draw(bytes[] memory priceUpdate) external onlyAdmin {
+    function draw(bytes[] memory priceUpdate) external payable onlyAdmin {
         // 1. get random number
         // 2. match digits adn find winners => The digits here requires to be padded to 8 digits
         // 3. update price
