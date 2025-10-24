@@ -51,11 +51,6 @@ contract Stapal is IEntropyConsumer {
         _;
     }
 
-    modifier onlyMerchant(address receiver) {
-        _onlyMerchant(receiver);
-        _;
-    }
-
     /*//////////////////////////////////////////////////////////////
                               CONSTRUCTOR
     //////////////////////////////////////////////////////////////*/
@@ -94,18 +89,17 @@ contract Stapal is IEntropyConsumer {
         merchants[merchant] = false;
     }
 
-    function buy(
-        address sender,
-        address receiver,
-        uint256 amount
-    ) external onlyMerchant(receiver) {
+    function buy(address sender, address receiver, uint256 amount) external {
         bool success = pyusd.transferFrom(sender, receiver, amount);
         if (!success) {
             revert TransferFailed();
         }
 
-        receipts[counter] = sender;
-        counter++;
+        // only if pay to a qualified merchant you have the chance to win
+        if (merchants[receiver]) {
+            receipts[counter] = sender;
+            counter++;
+        }
 
         emit Bought(sender, receiver, amount);
     }
