@@ -24,6 +24,7 @@ contract Stapal is IEntropyConsumer {
     uint256 public counter;
     address[] public currentWinners;
     uint256[] public currentAmounts;
+    uint256 public currentVrf;
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
@@ -65,7 +66,14 @@ contract Stapal is IEntropyConsumer {
         pyth = IPyth(pythContract);
         pyusd = MockPYUSD(pyusdContract);
         counter = 0;
+        // Initialize arrays with size 4 for 4 prize tiers
+        currentWinners = new address[](4);
+        currentAmounts = new uint256[](4);
     }
+
+    receive() external payable {}
+
+    fallback() external payable {}
 
     /*//////////////////////////////////////////////////////////////
                      EXTERNAL AND PUBLIC FUNCTIONS
@@ -104,13 +112,17 @@ contract Stapal is IEntropyConsumer {
         emit Bought(sender, receiver, amount);
     }
 
-    function draw(bytes[] memory priceUpdate) external payable onlyAdmin {
-        // 1. get random number
-        // 2. match digits adn find winners => The digits here requires to be padded to 8 digits
-        // 3. update price
-        // 4. calculate and distribute rewards
-        requestRandomNumber();
-        updatePriceAndDistribute(priceUpdate);
+    function drawWinners() external onlyAdmin {
+        // 1. before draw, call the requestRandomNumber function
+        // 2. now the currentVrf has been updated, we can then get the winners
+        // 3. after this we should then update price and distribute the prizes
+
+        (address[] memory winners, uint256[] memory amounts) = _matchDigits(
+            currentVrf
+        );
+
+        currentWinners = winners;
+        currentAmounts = amounts;
     }
 
     function requestRandomNumber() public payable {
@@ -129,17 +141,14 @@ contract Stapal is IEntropyConsumer {
         // WARNING: These lines are required to ensure the getPriceNoOlderThan call below succeeds. If you remove them, transactions may fail with "0x19abf40e" error.
         uint fee = pyth.getUpdateFee(priceUpdate);
         pyth.updatePriceFeeds{value: fee}(priceUpdate);
-
         PythStructs.Price memory price = pyth.getPriceNoOlderThan(
             PRICE_FEED_ID,
             60
         );
-
         uint256[] memory pyusdAmounts = _calculatePyusdAmounts(
             currentAmounts,
             price
         );
-
         _distribute(currentWinners, pyusdAmounts);
     }
 
@@ -164,26 +173,29 @@ contract Stapal is IEntropyConsumer {
         uint256 fullVrf = uint256(randomNumber);
 
         // limit the vrf to at most 8 digits
-        uint256 vrf = fullVrf % 100_000_000;
+        currentVrf = fullVrf % 100_000_000;
 
         // based on the vrf to find winners
-        (address[] memory winners, uint256[] memory amounts) = _matchDigits(
-            vrf
-        );
+        // (address[] memory winners, uint256[] memory amounts) = _matchDigits(
+        //     vrf
+        // );
 
-        uint8 length = uint8(winners.length);
-        for (uint8 i = 0; i < length; i++) {
-            if (winners[i] != address(0)) {
-                currentWinners[i] = winners[i];
-                currentAmounts[i] = amounts[i];
-            }
-        }
+        // uint8 length = uint8(winners.length);
+        // for (uint8 i = 0; i < length; i++) {
+        //     if (winners[i] != address(0)) {
+        //         currentWinners[i] = winners[i];
+        //         currentAmounts[i] = amounts[i];
+        //     }
+        // }
     }
 
     function _calculatePyusdAmounts(
         uint256[] memory amounts,
         PythStructs.Price memory price
     ) internal pure returns (uint256[] memory pyusdAmounts) {
+        // Initialize the return array with the same length
+        pyusdAmounts = new uint256[](amounts.length);
+
         uint256 basePrice = PythUtils.convertToUint(
             price.price,
             price.expo,
@@ -204,10 +216,7 @@ contract Stapal is IEntropyConsumer {
 
         for (uint8 i = 0; i < length; i++) {
             if (winners[i] != address(0)) {
-                bool success = pyusd.transfer(winners[i], pyusdAmounts[i]);
-                if (!success) {
-                    revert TransferFailed();
-                }
+                pyusd.transfer(winners[i], pyusdAmounts[i]);
             }
         }
 
@@ -229,6 +238,10 @@ contract Stapal is IEntropyConsumer {
         view
         returns (address[] memory winners, uint256[] memory amounts)
     {
+        // Initialize arrays with size 4
+        winners = new address[](4);
+        amounts = new uint256[](4);
+
         uint256 vrf7 = vrf % 1e7;
         uint256 vrf6 = vrf % 1e6;
         uint256 vrf5 = vrf % 1e5;
