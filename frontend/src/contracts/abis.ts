@@ -26,7 +26,21 @@ export const STAPAL_ABI = [
   },
   {
     type: "function",
-    name: "draw",
+    name: "requestRandomNumber",
+    inputs: [],
+    outputs: [],
+    stateMutability: "payable",
+  },
+  {
+    type: "function",
+    name: "drawWinners",
+    inputs: [],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "updatePriceAndDistribute",
     inputs: [{ name: "priceUpdate", type: "bytes[]" }],
     outputs: [],
     stateMutability: "payable",
