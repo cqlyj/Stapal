@@ -10,7 +10,7 @@ import {
 } from "wagmi";
 import { useState } from "react";
 import { STAPAL_ABI, PYUSD_ABI } from "@/contracts/abis";
-import { CONTRACT_ADDRESSES, PYTH_PRICE_FEED_ID } from "@/contracts/addresses";
+import { CONTRACT_ADDRESSES } from "@/contracts/addresses";
 import { parseUnits } from "viem";
 import { arbitrumSepolia } from "viem/chains";
 
@@ -36,6 +36,14 @@ export default function Home() {
   const [merchantAddress, setMerchantAddress] = useState("");
   const [depositAmount, setDepositAmount] = useState("");
   const [isDrawing, setIsDrawing] = useState(false);
+  const [drawProgress, setDrawProgress] = useState<
+    {
+      step: string;
+      status: "pending" | "processing" | "completed" | "error";
+      txHash?: string;
+      message?: string;
+    }[]
+  >([]);
 
   // Buy function
   const handleBuy = async () => {
@@ -128,65 +136,39 @@ export default function Home() {
     }
   };
 
-  // Draw function with Pyth integration
+  // Draw function - calls API route for server-side transaction signing
   const handleDraw = async () => {
     setIsDrawing(true);
+    setDrawProgress([]);
+
     try {
-      console.log("=== Starting Draw Function ===");
+      console.log("=== Starting Draw Process ===");
 
-      // Fetch price update data from Pyth Hermes API
-      const priceIds = [PYTH_PRICE_FEED_ID];
-      console.log("Fetching price data for:", priceIds[0]);
-
-      const response = await fetch(
-        `https://hermes.pyth.network/v2/updates/price/latest?ids[]=${priceIds[0]}`
-      );
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch price data: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log("Full Hermes response:", JSON.stringify(data, null, 2));
-
-      // The binary.data field contains an array of hex strings
-      // Each string is a price update that needs to be passed to the contract
-      const priceUpdateData = data.binary.data;
-
-      if (!Array.isArray(priceUpdateData) || priceUpdateData.length === 0) {
-        throw new Error("Invalid price update data format from Hermes API");
-      }
-
-      console.log("Price update data (array length):", priceUpdateData.length);
-      console.log("First update:", priceUpdateData[0].substring(0, 66) + "...");
-
-      // Send 0.1 ETH to be safe - should be more than enough for both fees
-      // Pyth fee is typically 1 wei per update on testnets
-      // Entropy fee varies by network
-      const valueInWei = parseUnits("0.1", 18);
-
-      console.log("Calling draw() with:");
-      console.log("- Contract:", CONTRACT_ADDRESSES.STAPAL);
-      console.log("- Value (ETH):", "0.1");
-      console.log("- Update array length:", priceUpdateData.length);
-
-      // Call draw with price update array and send ETH for fees
-      writeContract({
-        address: CONTRACT_ADDRESSES.STAPAL,
-        abi: STAPAL_ABI,
-        functionName: "draw",
-        args: [priceUpdateData as `0x${string}`[]],
-        value: valueInWei,
+      const response = await fetch("/api/draw", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
       });
 
-      console.log("Transaction sent, waiting for confirmation...");
+      console.log("Response status:", response.status);
+      console.log("Response ok:", response.ok);
+
+      const data = await response.json();
+      console.log("Response data:", data);
+
+      if (!response.ok) {
+        console.error("API returned error:", data);
+        throw new Error(data.error || data.details || "Draw process failed");
+      }
+
+      setDrawProgress(data.updates);
+      alert("Draw completed successfully!");
     } catch (error) {
       console.error("=== Draw Error ===");
       console.error(error);
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      console.error("Error message:", errorMessage);
-
       alert(`Draw failed: ${errorMessage}\n\nCheck console for more details.`);
     } finally {
       setIsDrawing(false);
@@ -381,15 +363,77 @@ export default function Home() {
 
               <button
                 onClick={handleDraw}
-                disabled={
-                  isPending || isConfirming || isDrawing || !isArbitrumSepolia
-                }
+                disabled={isDrawing}
                 className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-6 rounded-lg transition duration-200 disabled:opacity-50"
               >
-                {isDrawing || isPending || isConfirming
-                  ? "Drawing..."
-                  : "Draw Lottery"}
+                {isDrawing ? "Processing..." : "Draw Lottery"}
               </button>
+
+              {/* Progress Indicator */}
+              {drawProgress.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  <h4 className="font-semibold text-gray-700">
+                    Draw Progress:
+                  </h4>
+                  {drawProgress.map((update, index) => (
+                    <div
+                      key={index}
+                      className={`p-3 rounded-lg border ${
+                        update.status === "completed"
+                          ? "bg-green-50 border-green-200"
+                          : update.status === "error"
+                          ? "bg-red-50 border-red-200"
+                          : update.status === "processing"
+                          ? "bg-blue-50 border-blue-200"
+                          : "bg-gray-50 border-gray-200"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium text-sm">
+                          {update.step === "requestRandomNumber"
+                            ? "Step 1: Request Random Number"
+                            : update.step === "waiting"
+                            ? "⏳ Waiting for Callback"
+                            : update.step === "drawWinners"
+                            ? "Step 2: Draw Winners"
+                            : update.step === "updatePriceAndDistribute"
+                            ? "Step 3: Update Price & Distribute"
+                            : update.step}
+                        </span>
+                        <span
+                          className={`text-xs font-semibold px-2 py-1 rounded ${
+                            update.status === "completed"
+                              ? "bg-green-600 text-white"
+                              : update.status === "error"
+                              ? "bg-red-600 text-white"
+                              : update.status === "processing"
+                              ? "bg-blue-600 text-white"
+                              : "bg-gray-400 text-white"
+                          }`}
+                        >
+                          {update.status.toUpperCase()}
+                        </span>
+                      </div>
+                      {update.message && (
+                        <p className="text-xs text-gray-600 mb-1">
+                          {update.message}
+                        </p>
+                      )}
+                      {update.txHash && (
+                        <a
+                          href={`https://sepolia.arbiscan.io/tx/${update.txHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-600 hover:text-blue-800 underline break-all"
+                        >
+                          View Transaction: {update.txHash.slice(0, 10)}...
+                          {update.txHash.slice(-8)}
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Transaction Status */}
